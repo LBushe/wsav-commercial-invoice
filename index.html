@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Commercial Invoice Builder — Workspace AV</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#e6eaee;color:#111;min-height:100vh}
+.np{} 
+@media print{.np{display:none!important}body{background:white!important}.inv{padding:7mm 9mm!important;max-width:100%!important;box-shadow:none!important}@page{margin:5mm}}
+*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+input,select{padding:3px 5px;border:1px solid #334;border-radius:3px;background:#1a2c3e;color:#ddeeff;font-size:11px}
+input:focus,select:focus{outline:1px solid #5bc4f0}
+.lbl{display:flex;flex-direction:column;gap:2px;font-size:10px;color:#7aaabb}
+.btn{border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:600;padding:5px 14px}
+.cell{border:1px solid #ccc;padding:3px 5px;font-size:10px}
+.hcell{border:1px solid #ccc;padding:3px 5px;font-size:10px;font-weight:bold;text-align:center;background:#edf0f3}
+#tabs{background:#0d1a2a;display:flex;border-bottom:2px solid #1a3a5a;padding:0 16px}
+.tab{padding:9px 20px;border:none;border-bottom:3px solid transparent;background:transparent;color:#7aaabb;cursor:pointer;font-size:12px;font-weight:400}
+.tab.active{color:#5bc4f0;border-bottom-color:#5bc4f0;font-weight:700}
+#ctrl{background:#13243a;color:#cde;padding:14px 18px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.section{background:rgba(255,255,255,.05);padding:8px;border-radius:4px;display:flex;gap:8px;flex-wrap:wrap}
+.sec-title{width:100%;font-size:10px;font-weight:700;color:#7dc8f4;margin-bottom:2px}
+#drop{position:relative}
+#results{position:absolute;top:100%;left:0;z-index:300;width:540px;background:#0d1e2e;border:1px solid #254a6a;border-radius:4px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.7);display:none}
+.hit{padding:5px 8px;cursor:pointer;border-bottom:1px solid #152535;display:grid;grid-template-columns:105px 1fr 86px 30px 65px;gap:6px;align-items:center;font-size:10px}
+.hit:hover{background:#1a3a5a}
+#lines-table{width:100%;border-collapse:collapse;font-size:10px;min-width:680px}
+#lines-table th{padding:3px 5px;border:1px solid #254060;background:#1a3050;color:#8aabcc;text-align:left;white-space:nowrap}
+#lines-table td{padding:2px 5px;border:1px solid #152535}
+.inv{background:white;padding:10mm 12mm;max-width:282mm;margin:0 auto;box-shadow:0 2px 16px rgba(0,0,0,.15)}
+#cat-wrap{padding:16px 20px;max-width:1280px}
+#cat-table{width:100%;border-collapse:collapse;font-size:10px;min-width:960px}
+#cat-table th{padding:5px 6px;border:1px solid #254060;background:#1a3050;color:#8aabcc;text-align:left;white-space:nowrap;position:sticky;top:0}
+#cat-table td{padding:2px 6px;border:1px solid #152535}
+.cat-scroll{overflow:auto;border-radius:4px;border:1px solid #1a3a5a;max-height:60vh}
+</style>
+</head>
+<body>
+
+<div id="tabs" class="np">
+  <button class="tab active" onclick="showTab('invoice')">📄 Invoice</button>
+  <button class="tab" onclick="showTab('catalogue')">📦 Manage Catalogue</button>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:10px;color:#456;padding-right:6px">
+    <span id="cat-count"></span>
+  </div>
+</div>
+
+<!-- ══ CONTROLS ══ -->
+<div id="ctrl" class="np">
+  <!-- Row 1 -->
+  <div class="row">
+    <label class="lbl">Invoice No.<input id="num" oninput="render()"></label>
+    <label class="lbl">Date<input id="date" oninput="render()"></label>
+    <label class="lbl">Carrier / Ship Via<input id="carrier" style="width:170px" oninput="render()"></label>
+    <label class="lbl">Document No.<input id="docNum" style="width:150px" oninput="render()"></label>
+    <label class="lbl">Freight Terms
+      <select id="terms" onchange="render()">
+        <option>DDP</option><option>DAP</option><option>EXW</option><option>FOB</option><option>CIF</option><option>CPT</option><option>DPU</option>
+      </select>
+    </label>
+    <label class="lbl">Currency
+      <select id="curr" onchange="render()">
+        <option>GBP</option><option>USD</option><option>EUR</option>
+      </select>
+    </label>
+    <button class="btn" style="background:#4a1a1a;color:#fcc;align-self:flex-end" onclick="resetAll()">Reset All</button>
+  </div>
+  <!-- Row 2 -->
+  <div class="row">
+    <div class="section" style="flex:2 1 400px">
+      <div class="sec-title">CONSIGNEE</div>
+      <label class="lbl">Company Name<input id="cName" style="width:200px" oninput="render()"></label>
+      <label class="lbl">Address Line 1<input id="cAddr1" style="width:168px" oninput="render()"></label>
+      <label class="lbl">Address Line 2<input id="cAddr2" style="width:168px" oninput="render()"></label>
+      <label class="lbl">VAT No.<input id="cVat" style="width:108px" oninput="render()"></label>
+      <label class="lbl">EORI No.<input id="cEori" style="width:128px" oninput="render()"></label>
+      <label class="lbl">Contact Name<input id="cContact" style="width:128px" oninput="render()"></label>
+      <label class="lbl">Tel<input id="cTel" style="width:118px" oninput="render()"></label>
+      <label class="lbl">Email<input id="cEmail" style="width:190px" oninput="render()"></label>
+    </div>
+    <div class="section" style="flex:1 1 200px">
+      <div class="sec-title">SHIPPER CONTACT</div>
+      <label class="lbl">Contact Name<input id="sContact" style="width:160px" oninput="render()"></label>
+      <label class="lbl">Telephone<input id="sTel" style="width:140px" oninput="render()"></label>
+      <label class="lbl">Email<input id="sEmail" style="width:200px" oninput="render()"></label>
+    </div>
+  </div>
+  <!-- Row 3 -->
+  <div class="row" style="align-items:flex-end">
+    <div id="drop">
+      <label class="lbl">Search & Add from Catalogue
+        <input id="srch" placeholder="Product name, code or HS code…" style="width:290px" oninput="doSearch()" onfocus="doSearch()">
+      </label>
+      <div id="results"></div>
+    </div>
+    <button class="btn" id="cmode-btn" style="background:#1a5a3a;color:white" onclick="toggleCmode()">＋ Custom Line</button>
+    <label class="lbl">Shipper Signature
+      <div style="display:flex;gap:6px;align-items:center;height:32px">
+        <div id="sig-area">
+          <label style="padding:4px 12px;background:#1a3a5a;color:#9bc;border:1px dashed #254060;border-radius:3px;cursor:pointer;font-size:10px;white-space:nowrap">
+            ↑ Upload Image<input type="file" accept="image/*" style="display:none" onchange="loadSig(this)">
+          </label>
+        </div>
+      </div>
+    </label>
+    <button class="btn" style="background:#1a3a7a;color:white" onclick="downloadInvoice()">🖨 Download &amp; Print</button>
+    <div id="line-summary" style="color:#7ec;font-size:10px;align-self:flex-end;padding-bottom:4px"></div>
+  </div>
+  <!-- Custom line form -->
+  <div id="cform" style="display:none;background:rgba(255,255,255,.06);border-radius:4px;padding:10px;margin-bottom:8px">
+    <div class="sec-title">CUSTOM LINE (one-off — not saved to catalogue)</div>
+    <div class="row" style="align-items:flex-end;margin-bottom:0">
+      <label class="lbl">Description *<input id="cl_desc" style="width:260px"></label>
+      <label class="lbl">HS Code<input id="cl_hs" style="width:100px"></label>
+      <label class="lbl">CoO<input id="cl_coo" style="width:48px"></label>
+      <label class="lbl">Unit Value<input id="cl_uv" type="number" style="width:82px"></label>
+      <label class="lbl">Qty<input id="cl_qty" type="number" value="1" style="width:46px"></label>
+      <label class="lbl">H (mm)<input id="cl_h" type="number" style="width:58px"></label>
+      <label class="lbl">W (mm)<input id="cl_w" type="number" style="width:58px"></label>
+      <label class="lbl">D (mm)<input id="cl_d" type="number" style="width:58px"></label>
+      <label class="lbl">Nett (kg)<input id="cl_nett" type="number" style="width:64px"></label>
+      <label class="lbl">Gross (kg)<input id="cl_gross" type="number" style="width:70px"></label>
+      <button class="btn" style="background:#1a6a3a;color:white;align-self:flex-end" onclick="addCustomLine()">Add</button>
+    </div>
+  </div>
+  <!-- Lines editor -->
+  <div id="lines-editor" style="display:none">
+    <div style="font-size:10px;font-weight:700;color:#7dc8f4;margin-bottom:4px">INVOICE LINES — adjust qty / unit value · ▲▼ reorder · ✕ remove</div>
+    <div style="overflow-x:auto">
+    <table id="lines-table">
+      <thead><tr>
+        <th>#</th><th>Description</th><th>HS Code</th><th>CoO</th><th>Qty</th><th>Unit Value</th><th style="text-align:right">Line Total</th><th>⇅</th><th></th>
+      </tr></thead>
+      <tbody id="lines-body"></tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INVOICE ══ -->
+<div id="invoice-tab">
+<div class="inv" id="inv">
+  <div id="inv-title" style="font-size:20px;font-weight:bold;margin-bottom:8px">Commercial Invoice</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:4px;font-size:10px">
+    <tr>
+      <td style="vertical-align:top;width:54%;padding-bottom:4px">
+        <div style="font-weight:bold;font-size:11px">Workspace Audio Visual Ltd</div>
+        <div>Unit 5 Frobisher Industrial Centre, Budds Lane</div>
+        <div>Romsey, Hampshire, SO51 0EZ, UK</div>
+        <div>Contact Name: <span id="h-sContact"></span></div>
+        <div>Phone Number: <span id="h-sTel"></span></div>
+      </td>
+      <td style="vertical-align:top">
+        <table style="border-collapse:collapse;margin-left:auto;font-size:10px">
+          <tr><td style="font-weight:bold;text-align:right;padding-right:8px;padding-bottom:3px;white-space:nowrap">Date:</td><td style="border-bottom:1px solid #444;min-width:158px;padding-left:4px;padding-bottom:3px" id="h-date"></td></tr>
+          <tr><td style="font-weight:bold;text-align:right;padding-right:8px;padding-bottom:3px;white-space:nowrap">Ship Via (Carrier)</td><td style="border-bottom:1px solid #444;min-width:158px;padding-left:4px;padding-bottom:3px" id="h-carrier"></td></tr>
+          <tr><td style="font-weight:bold;text-align:right;padding-right:8px;padding-bottom:3px;white-space:nowrap">Document Number:</td><td style="border-bottom:1px solid #444;min-width:158px;padding-left:4px;padding-bottom:3px" id="h-docNum"></td></tr>
+        </table>
+      </td>
+    </tr>
+    <tr><td colspan="2" style="padding-bottom:4px;font-size:10px">
+      <div>VAT number:&nbsp; GB380641989</div>
+      <div>EORI Number: GB380641989000</div>
+    </td></tr>
+  </table>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:5px;font-size:10px">
+    <tr>
+      <td style="width:49.5%;background:#cce0f2;padding:7px 8px;vertical-align:top;border:1px solid #aac8e0">
+        <div style="font-weight:bold;font-size:11px;margin-bottom:3px">Consignee</div>
+        <div id="h-cName" style="font-weight:bold"></div>
+        <div id="h-cAddr1"></div><div id="h-cAddr2"></div>
+        <div>VAT Number: <span id="h-cVat"></span></div>
+        <div>EORI Number: <span id="h-cEori"></span></div>
+        <div style="margin-top:4px">Contact Name: <span id="h-cContact"></span></div>
+        <div>Telephone Number: <span id="h-cTel"></span></div>
+        <div>Email: <span id="h-cEmail"></span></div>
+      </td>
+      <td style="width:1%"></td>
+      <td style="width:49.5%;background:#cce0f2;padding:7px 8px;vertical-align:top;border:1px solid #aac8e0">
+        <div style="font-weight:bold;font-size:11px;margin-bottom:3px">Shipper Address</div>
+        <div>Workspace Audio Visual Ltd</div>
+        <div>Unit 5 Frobisher Industrial Centre, Budds Lane</div>
+        <div>Romsey, Hampshire, SO51 0EZ, UK</div>
+        <div>VAT number:&nbsp; GB380641989</div>
+        <div>EORI Number: GB380641989000</div>
+        <div style="margin-top:4px">Contact Name: <span id="h-sContact2"></span></div>
+        <div>Telephone Number: <span id="h-sTel2"></span></div>
+        <div style="color:#1155cc">Email: <span id="h-sEmail"></span></div>
+      </td>
+    </tr>
+  </table>
+  <div id="h-terms" style="background:#8cbe8c;padding:5px 8px;text-align:center;font-weight:bold;font-size:11px;border:1px solid #7aaa7a;margin-bottom:6px"></div>
+  <table style="width:100%;border-collapse:collapse;font-size:10px">
+    <thead><tr>
+      <th class="hcell" style="width:42px">Qty</th>
+      <th class="hcell" style="text-align:left;padding-left:6px">Description of Goods</th>
+      <th class="hcell" style="width:80px">HS Code</th>
+      <th class="hcell" style="width:58px">Country of<br>Origin</th>
+      <th class="hcell" style="width:70px;background:#f5c8c8">Unit<br>Value</th>
+      <th class="hcell" style="width:70px;background:#f5c8c8">Total<br>Value</th>
+    </tr></thead>
+    <tbody id="inv-lines"></tbody>
+  </table>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10px">
+    <tr>
+      <td style="background:#8cbe8c;padding:5px 8px;font-weight:bold;border:1px solid #7aaa7a;font-size:11px">All Charges listed above are in <span id="h-curr"></span></td>
+      <td style="background:#8cbe8c;padding:5px 8px;font-weight:bold;border:1px solid #7aaa7a;text-align:right;width:85px;font-size:11px">Total</td>
+      <td id="inv-total" style="background:#f5c8c8;padding:5px 8px;font-weight:bold;border:1px solid #e8aaaa;text-align:right;width:72px;font-size:11px"></td>
+    </tr>
+  </table>
+  <table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:10px">
+    <thead><tr>
+      <th class="hcell" style="text-align:left;padding-left:5px;font-size:9px">Item</th>
+      <th class="hcell" style="width:34px;font-size:9px">Qty</th>
+      <th class="hcell" style="width:66px;font-size:9px">Height<br>(mm)</th>
+      <th class="hcell" style="width:66px;font-size:9px">Width<br>(mm)</th>
+      <th class="hcell" style="width:66px;font-size:9px">Depth<br>(mm)</th>
+      <th class="hcell" style="width:74px;font-size:9px">Nett Weight<br>(kg)</th>
+      <th class="hcell" style="width:74px;font-size:9px">Gross Weight<br>(kg)</th>
+      <th class="hcell" style="width:74px;background:#f5c8c8;font-size:9px">Total Nett<br>(kg)</th>
+      <th class="hcell" style="width:74px;background:#f5c8c8;font-size:9px">Total Gross<br>(kg)</th>
+    </tr></thead>
+    <tbody id="inv-dims"></tbody>
+  </table>
+  <div style="background:#cce0f2;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border:1px solid #aac8e0;min-height:60px">
+    <div></div>
+    <div style="text-align:center">
+      <div id="sig-display" style="height:44px;max-width:180px;margin:0 auto 3px;display:flex;align-items:center;justify-content:center;color:#aaa;font-style:italic;font-size:11px">[Signature]</div>
+      <div style="font-weight:bold;font-size:10px">Shipper's Signature</div>
+    </div>
+    <div id="h-date2" style="font-size:10px"></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ CATALOGUE TAB ══ -->
+<div id="catalogue-tab" style="display:none">
+<div id="cat-wrap">
+  <div style="color:#7dc8f4;font-weight:700;font-size:13px;margin-bottom:12px" id="cat-title"></div>
+  <div style="background:#13243a;border:1px solid #1a3a5a;border-radius:6px;padding:12px;margin-bottom:16px">
+    <div class="sec-title" style="margin-bottom:8px">＋ ADD NEW ITEM</div>
+    <div class="row" style="align-items:flex-end;margin-bottom:0">
+      <label class="lbl">Short Code *<input id="ni_code" style="width:110px"></label>
+      <label class="lbl">Description *<input id="ni_desc" style="width:280px"></label>
+      <label class="lbl">HS Code<input id="ni_hs" style="width:100px"></label>
+      <label class="lbl">CoO<input id="ni_coo" style="width:46px"></label>
+      <label class="lbl">Unit Value<input id="ni_uv" type="number" style="width:88px"></label>
+      <label class="lbl">H (mm)<input id="ni_h" type="number" style="width:62px"></label>
+      <label class="lbl">W (mm)<input id="ni_w" type="number" style="width:62px"></label>
+      <label class="lbl">D (mm)<input id="ni_d" type="number" style="width:62px"></label>
+      <label class="lbl">Nett (kg)<input id="ni_nett" type="number" style="width:66px"></label>
+      <label class="lbl">Gross (kg)<input id="ni_gross" type="number" style="width:70px"></label>
+      <button class="btn" style="background:#1a6a3a;color:white;align-self:flex-end" onclick="addToCat()">Save to Catalogue</button>
+    </div>
+  </div>
+  <div class="row" style="align-items:center">
+    <label class="lbl">Filter<input id="catQ" placeholder="Search by name or code…" style="width:220px" oninput="renderCat()"></label>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:14px;cursor:pointer;font-size:10px;color:#7aaabb">
+      <input type="checkbox" id="showBI" checked onchange="renderCat()" style="accent-color:#5bc4f0"> Show built-in items
+    </label>
+    <div id="cat-shown" style="color:#567;font-size:10px;margin-top:14px"></div>
+  </div>
+  <div class="cat-scroll" style="margin-top:10px">
+    <table id="cat-table">
+      <thead><tr>
+        <th></th><th>Code</th><th>Description</th><th>HS Code</th><th>CoO</th><th>Unit Value</th>
+        <th>H mm</th><th>W mm</th><th>D mm</th><th>Nett kg</th><th>Gross kg</th><th></th>
+      </tr></thead>
+      <tbody id="cat-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<script>
+// ── CATALOGUE DATA ──
+const BUILTIN=[
+{code:"SABER-AT",desc:"Angekis Saber AT Camera",hs:"8525890000",coo:"CN",uv:1748.60,h:220,w:190,d:193,nett:1.7,gross:1.9},
+{code:"SABER-PLUS",desc:"Angekis Saber Plus Camera",hs:"8525890000",coo:"CN",uv:1608.00,h:220,w:190,d:173,nett:1.2,gross:1.47},
+{code:"AP6015",desc:"APC AP6015A Rack PDU",hs:"8536301090",coo:"US",uv:63.02,h:240,w:440,d:93,nett:1,gross:1.2},
+{code:"APPLETV",desc:"Apple TV 4k (wifi) Player",hs:"8528710000",coo:"US",uv:121.00,h:16,w:73,d:106,nett:0.8,gross:1},
+{code:"BARCX50",desc:"BARCX50 Clickshare",hs:"8517699000",coo:"CN",uv:1685.00,h:39,w:200,d:202,nett:1,gross:1.2},
+{code:"CMX88CS",desc:"Bluestream CMX88CS HDMI Matrix",hs:"8517699000",coo:"CN",uv:1195.01,h:51,w:441,d:234,nett:2.5,gross:3.5},
+{code:"HEX70SL-KIT",desc:"Bluestream HEX70SL-KIT HDMI Extender Kit",hs:"8517699000",coo:"CN",uv:139.94,h:16,w:73,d:106,nett:0.8,gross:1},
+{code:"BRS1018BK-100",desc:"BRS1018BK-100 Black Sock - Containment",hs:"5402200010",coo:"GB",uv:23.00,h:320,w:520,d:330,nett:9.8,gross:11.5},
+{code:"BT7871-B",desc:"Btech BT7871/B Mounting Plate",hs:"8302490099",coo:"CN",uv:49.13,h:75,w:185,d:2,nett:3,gross:3.1},
+{code:"CABTSFLSOH-1",desc:"CABTSFLSOH-1 FST Control Cable",hs:"8544499100",coo:"CN",uv:24.00,h:320,w:520,d:330,nett:5,gross:6.5},
+{code:"CSSLP15X10",desc:"Chief CSSLP15X10 Slide Out Panel",hs:"8302420090",coo:"CN",uv:99.00,h:272,w:577,d:35,nett:3,gross:4.58},
+{code:"FCA840",desc:"Chief FCA840 Adapter Mount",hs:"8302420090",coo:"CN",uv:101.00,h:432,w:1041,d:17,nett:3.7,gross:4.5},
+{code:"FCAV1U",desc:"Chief FCAV1U Wall Bracket",hs:"8302420090",coo:"CN",uv:76.00,h:149,w:495,d:40,nett:7,gross:8.27},
+{code:"LPAUB",desc:"Chief LPAUB Mobile Cart",hs:"8302420090",coo:"CN",uv:813.33,h:190,w:800,d:1250,nett:37.4,gross:41},
+{code:"LSCUB",desc:"Chief LSCUB Voyager Height Adjustable Cart",hs:"8302490099",coo:"CN",uv:1460.00,h:1809,w:885,d:937,nett:55,gross:61},
+{code:"LSM1U",desc:"Chief LSM1U Wall Bracket",hs:"8302419000",coo:"US",uv:120.00,h:51,w:464,d:654,nett:8.8,gross:9},
+{code:"MSM1U",desc:"Chief MSM1U Wall Bracket",hs:"8302420090",coo:"US",uv:60.00,h:43,w:66,d:5,nett:6.2,gross:7.6},
+{code:"XTM1U",desc:"Chief XTM1U Wall Bracket",hs:"8302419000",coo:"CN",uv:178.00,h:74,w:471,d:1148,nett:11,gross:12.3},
+{code:"CAB-USBC-AC-9M",desc:"Cisco CAB-USBC-AC-9M= USB Cable",hs:"8544429050",coo:"CN",uv:532.06,h:10,w:50,d:30,nett:0.2,gross:0.3},
+{code:"CS-T10-TS-L-K9",desc:"Cisco CS-T10-TS-L-K9 Room Navigator Panel",hs:"8537109860",coo:"CN",uv:729.77,h:71,w:242,d:163,nett:1,gross:1.2},
+{code:"ControlCUE-Basic",desc:"ControlCUE-Basic IP Controller",hs:"8517620000",coo:"CN",uv:421.00,h:30,w:120,d:80,nett:0.5,gross:1.2},
+{code:"TSS-1070-LB-KIT",desc:"Crestron TSS-1070-B-S-LB-KIT Touch Screen",hs:"8528521000",coo:"MX",uv:739.00,h:149,w:259,d:58,nett:0.7,gross:1},
+{code:"TSW-MSMK-ANG",desc:"Crestron TSW-770/1070-MSMK-ANG-B-S Mount Kit",hs:"8302500000",coo:"MX",uv:29.00,h:113,w:151,d:63,nett:0.5,gross:0.9},
+{code:"CS-BRDP55-K9",desc:"CS-BRDP55-K9 Cisco Webex Board Pro 55 G2",hs:"8528529100",coo:"CN",uv:10063.38,h:1508,w:1000,d:242,nett:67,gross:75},
+{code:"CS-DESKMINI-C-K9",desc:"CS-DESKMINI-C-K9 Cisco Desk Mini",hs:"8517699000",coo:"MX",uv:1190.00,h:480,w:540,d:280,nett:7.4,gross:9},
+{code:"EXP410160EX",desc:"EXP410160EX TC Fixings M5x65",hs:"7318129090",coo:"VN",uv:4.57,h:230,w:310,d:330,nett:6,gross:7.5},
+{code:"60-1309-12",desc:"Extron 60-1309-12 SM28T Speakers",hs:"8518210000",coo:"US",uv:353.00,h:578,w:349,d:464,nett:9.5,gross:13.2},
+{code:"60-1311-03",desc:"Extron 60-1311-03 SF 3CT LP Speakers",hs:"8518210000",coo:"US",uv:135.00,h:375,w:324,d:330,nett:5,gross:7.3},
+{code:"60-1449-11",desc:"Extron 60-1449-11 MPA 601-100V Mono Amp",hs:"8518400090",coo:"US",uv:245.00,h:76,w:229,d:356,nett:1,gross:1.44},
+{code:"60-1563-12",desc:"Extron 60-1563-12 TLP Pro 725M Touch Panel",hs:"8528529100",coo:"US",uv:985.00,h:75,w:267,d:191,nett:0.5,gross:0.85},
+{code:"60-1667-03",desc:"Extron 60-1667-03 TLP Pro 300 Touch Panel",hs:"8528529100",coo:"US",uv:551.00,h:102,w:146,d:140,nett:1,gross:1.2},
+{code:"60-1910-01",desc:"Extron 60-1910-01 IPCP Pro PCS1 Control Processor",hs:"8517620000",coo:"US",uv:516.00,h:75,w:267,d:191,nett:0.5,gross:0.8},
+{code:"60-1914-01A",desc:"Extron 60-1914-01A ipcp Pro 255QXI Control Processor",hs:"8517620000",coo:"US",uv:1469.00,h:70,w:229,d:343,nett:0.7,gross:1.13},
+{code:"60-2026-01",desc:"Extron 60-2026-01 XPA U 2004 FX 4-Ch Pwr Amp",hs:"8518400090",coo:"US",uv:1295.00,h:119,w:535,d:555,nett:4.6,gross:7.2},
+{code:"60-850-11",desc:"Extron 60-850-11 XPA 2001-100V Mono Amp",hs:"8518400090",coo:"US",uv:387.00,h:140,w:349,d:368,nett:1.1,gross:2.2},
+{code:"eBus",desc:"Extron eBus Partition Sensor",hs:"8531807000",coo:"US",uv:230.45,h:70,w:228,d:232,nett:0.3,gross:0.57},
+{code:"IPCP-Pro-Xi",desc:"Extron IPCP Pro Xi Control Processor",hs:"8517620000",coo:"US",uv:1558.00,h:75,w:267,d:191,nett:0.8,gross:0.91},
+{code:"IPCPPROXI",desc:"Extron IPCP Pro Xi Processor",hs:"8517620000",coo:"US",uv:567.00,h:75,w:267,d:191,nett:1,gross:1.2},
+{code:"MPA-601-100V",desc:"Extron MPA 601-100V Amplifier",hs:"8543709030",coo:"US",uv:625.00,h:70,w:229,d:343,nett:1.4,gross:1.6},
+{code:"SF26CTLP",desc:"Extron SF26CTLP Speakers",hs:"8518220090",coo:"US",uv:486.00,h:356,w:343,d:521,nett:11.7,gross:12.1},
+{code:"SM-26",desc:"Extron SM 26 Surface Mount Speakers",hs:"8518220090",coo:"US",uv:406.00,h:451,w:333,d:454,nett:8.8,gross:9.3},
+{code:"SW2-HD-4K-PLUS",desc:"Extron SW2 HD 4K PLUS Switcher",hs:"8517620000",coo:"US",uv:580.00,h:127,w:279,d:279,nett:0.5,gross:1.2},
+{code:"XPAU1002",desc:"Extron XPA U 1002 Amplifier",hs:"8518400090",coo:"US",uv:501.00,h:127,w:356,d:381,nett:2.7,gross:2.7},
+{code:"M-10X",desc:"Furman M-10X PDU",hs:"8536301090",coo:"US",uv:119.00,h:80,w:560,d:300,nett:1.3,gross:1.5},
+{code:"HDMI-CABLE",desc:"HDMI Cable",hs:"8544429000",coo:"CN",uv:5.50,h:185,w:110,d:30,nett:0.5,gross:1},
+{code:"SHARE2U",desc:"Inogeni SHARE 2 U",hs:"8537109860",coo:"CN",uv:405.00,h:185,w:110,d:30,nett:0.5,gross:1},
+{code:"LCAT6ASFTPBLK",desc:"LCAT6ASFTPBLK Patch Leads",hs:"8544429000",coo:"CN",uv:1.20,h:320,w:520,d:330,nett:16,gross:18},
+{code:"LCAT6ASFTPBLK-2",desc:"LCAT6ASFTPBLK-2 2m Patch Leads",hs:"8544429000",coo:"CN",uv:2.05,h:320,w:520,d:330,nett:18,gross:21.5},
+{code:"11RXS0090A",desc:"Lenovo 11RXS0090A Core PC for Logitech Tap",hs:"8471300000",coo:"CN",uv:850.00,h:226,w:200,d:37,nett:1,gross:1.1},
+{code:"LIECEUR-3",desc:"LIECEUR-3 IEC Leads",hs:"8544429090",coo:"CN",uv:2.10,h:320,w:520,d:330,nett:17.3,gross:21},
+{code:"939-001950",desc:"Logitech 939-001950 Tap Touch Panel",hs:"8537109860",coo:"CN",uv:939.00,h:58,w:244,d:179,nett:1.3,gross:1.5},
+{code:"950-000085",desc:"Logitech 950-000085 Room Mate",hs:"8537109860",coo:"CN",uv:853.00,h:345,w:161,d:211,nett:0.5,gross:0.8},
+{code:"952-000002",desc:"Logitech 952-000002 Mic Mount",hs:"8302490099",coo:"CN",uv:54.93,h:90,w:146,d:146,nett:0.3,gross:0.8},
+{code:"952-000041",desc:"Logitech 952-000041 TV Vesa Mount",hs:"8302490099",coo:"CN",uv:194.83,h:127,w:258,d:620,nett:1.5,gross:3.8},
+{code:"952-000044",desc:"Logitech 952-000044 Rally Bar Wall Mount",hs:"8302490099",coo:"CN",uv:198.00,h:236,w:100,d:84,nett:0.5,gross:0.7},
+{code:"952-000080",desc:"Logitech 952-000080 Tap Riser Mount",hs:"8302490099",coo:"CN",uv:154.25,h:102,w:244,d:174,nett:1,gross:1.2},
+{code:"960-001227",desc:"Logitech 960-001227 Rally Camera",hs:"8517699000",coo:"CN",uv:1177.00,h:182,w:152,d:152,nett:4,gross:4.2},
+{code:"960-001312",desc:"Logitech 960-001312 Rally Bar",hs:"8517620000",coo:"CN",uv:2400.00,h:164,w:910,d:130,nett:7.1,gross:7.3},
+{code:"960-001340",desc:"Logitech 960-001340 Rally Bar Mini",hs:"8517620000",coo:"CN",uv:2200.00,h:914,w:719,d:101,nett:4,gross:4.5},
+{code:"989-000430",desc:"Logitech 989-000430 Mic Pod",hs:"8518100090",coo:"CN",uv:247.64,h:21,w:102,d:102,nett:0.4,gross:0.8},
+{code:"LUSB2MMAB-2",desc:"LUSB2MMAB-2 2m A-B USB Leads",hs:"8537109860",coo:"CN",uv:1.69,h:320,w:520,d:330,nett:17,gross:19.5},
+{code:"NEATBARPRO",desc:"Neat Neatbar Pro",hs:"8517620000",coo:"CN",uv:1375.00,h:80,w:890,d:80,nett:3.1,gross:4.2},
+{code:"NEATBOARD-65",desc:"Neat NEATBOARD 65 inch",hs:"8528529100",coo:"CN",uv:3847.78,h:1003,w:1476,d:350,nett:46.5,gross:54},
+{code:"NEATBOARD50",desc:"Neat NeatBoard 50 inch",hs:"8517620000",coo:"CN",uv:3387.00,h:906,w:1310,d:158,nett:27,gross:31.5},
+{code:"NEATPAD",desc:"Neat NeatPad Touch Panel",hs:"8537109860",coo:"CN",uv:574.07,h:96,w:525,d:255,nett:2.4,gross:2.8},
+{code:"NEATWALLMOUNT",desc:"Neat Wall Mount Bracket",hs:"8302420090",coo:"CN",uv:227.29,h:939,w:1476,d:350,nett:50.6,gross:52},
+{code:"NEATBOARD50WALLMOUNT",desc:"Neat Board 50 Wall Mount Bracket",hs:"8302420090",coo:"CN",uv:227.29,h:814,w:404,d:72,nett:5,gross:5.7},
+{code:"NEATBOARD-ADAPTIVESTAND",desc:"NeatBoard50 Flexible Acoustic Stand",hs:"8302419000",coo:"CN",uv:1390.12,h:920,w:1310,d:300,nett:39,gross:42},
+{code:"PV800UL",desc:"NEC PV800UL WUXGA LCD Projector",hs:"8528620000",coo:"CN",uv:7333.00,h:164,w:499,d:407,nett:11.2,gross:15},
+{code:"GSM4210PD",desc:"Netgear GSM4210PD Network Switch",hs:"8517620000",coo:"CN",uv:1558.00,h:210,w:40,d:140,nett:1,gross:1.2},
+{code:"NGGSM4230PX100E",desc:"Netgear NGGSM4230PX100E Network Switch",hs:"8517620000",coo:"CN",uv:1658.00,h:210,w:40,d:140,nett:1,gross:1.2},
+{code:"CP-0210",desc:"Penn Elcom CP-0210 1U Blank Panel",hs:"8302490099",coo:"UK",uv:2.40,h:10,w:500,d:10,nett:0.1,gross:0.3},
+{code:"WB-2310",desc:"Penn Elcom WB-2310 1U Rack Shelf",hs:"8302490099",coo:"UK",uv:13.26,h:50,w:500,d:290,nett:1,gross:1.2},
+{code:"55BDL3550Q",desc:"Philips 55BDL3550Q/00 55 inch LED Display",hs:"8528529100",coo:"CN",uv:978.69,h:712,w:1241,d:64,nett:16.6,gross:18.5},
+{code:"75BDL4650D",desc:"Philips 75BDL4650D 75 inch LED Display",hs:"8528529100",coo:"CN",uv:1857.00,h:962,w:1685,d:92,nett:36.3,gross:39},
+{code:"875K5AA",desc:"Poly 875K5AA TC10 Touch Screen",hs:"8473308000",coo:"MX",uv:1035.00,h:55,w:190,d:210,nett:1,gross:1.27},
+{code:"99T09AA-AC3",desc:"Poly 99T09AA#AC3 Poly G62",hs:"8517699000",coo:"MX",uv:1357.00,h:34,w:247,d:152,nett:1,gross:1.2},
+{code:"9W1A6AA-AC3",desc:"Poly 9W1A6AA#AC3 Poly E60 Camera",hs:"8525890000",coo:"CH",uv:1370.00,h:245,w:264,d:194,nett:3,gross:3.9},
+{code:"9W1A8AA-AC3",desc:"Poly 9W1A8AA#AC3 E60 Ceiling Mount",hs:"8302420090",coo:"CH",uv:109.91,h:130,w:700,d:245,nett:2,gross:2.3},
+{code:"IO-USB",desc:"QSC I/O-USB Bridge",hs:"8517620000",coo:"US",uv:1511.00,h:667,w:1093,d:126,nett:8.8,gross:11.3},
+{code:"NC-12x80",desc:"QSC NC-12x80 PTZ Camera",hs:"8525890000",coo:"US",uv:3370.50,h:25,w:85,d:183,nett:0.5,gross:0.9},
+{code:"QIO-GP8x8",desc:"QSC QIO-GP8x8 Network I/O Expander",hs:"8517620000",coo:"US",uv:298.50,h:170,w:142,d:164,nett:1.6,gross:2.7},
+{code:"NC-110",desc:"QSC NC-110 Camera",hs:"8525890000",coo:"US",uv:1063.66,h:40,w:215,d:108,nett:0.5,gross:1.1},
+{code:"LH43QMCE",desc:"Samsung LH43QMCE 43 inch Display",hs:"8528529100",coo:"CN",uv:524.34,h:34,w:42,d:194,nett:1,gross:1.8},
+{code:"SMQE55T",desc:"Samsung SMQE55T 55 inch Display",hs:"8528529100",coo:"CN",uv:750.00,h:843,w:1386,d:158,nett:14.1,gross:20.2},
+{code:"SMQE75T",desc:"Samsung SMQE75T 75 inch Display",hs:"8528529100",coo:"CN",uv:1700.00,h:1118,w:1840,d:198,nett:30.9,gross:38.9},
+{code:"SMQE85T",desc:"Samsung SMQE85T 85 inch Display",hs:"8528529100",coo:"CN",uv:2700.00,h:1237,w:2075,d:220,nett:45,gross:54.3},
+{code:"SMQM50C",desc:"Samsung SMQM50C 50 inch Display",hs:"8528529100",coo:"CN",uv:653.83,h:761,w:1246,d:131,nett:11.8,gross:14.9},
+{code:"SMQM75C",desc:"Samsung SMQM75C 75 inch Display",hs:"8528529100",coo:"CN",uv:1485.00,h:1113,w:1839,d:180,nett:33,gross:42.8},
+{code:"MX153C-TQG",desc:"Shure MX153C/O-TQG Earset Mic",hs:"8518100090",coo:"CH",uv:171.00,h:22,w:45,d:99,nett:0.3,gross:0.5},
+{code:"MXA920W",desc:"Shure MXA920W Ceiling Microphone",hs:"8518100090",coo:"CN",uv:4690.00,h:57,w:594,d:594,nett:5,gross:6},
+{code:"MXW-NEXT2",desc:"Shure MXW NEXT2 Access Point",hs:"8517610000",coo:"MX",uv:852.50,h:49,w:252,d:203,nett:1.1,gross:1.3},
+{code:"MXW1-0",desc:"Shure MXW1/0 =Z11 Bodypack Transmitter",hs:"8518100090",coo:"CN",uv:487.00,h:22,w:45,d:99,nett:0.8,gross:1.1},
+{code:"MXW1X",desc:"Shure MXW1X Body Pack Transmitter",hs:"8518100090",coo:"CH",uv:469.22,h:49,w:252,d:203,nett:1.1,gross:1.3},
+{code:"MXW2-SM58",desc:"Shure MXW2/SM58 Handheld Transmitter",hs:"8518100090",coo:"CN",uv:506.00,h:226,w:51,d:51,nett:0.5,gross:0.9},
+{code:"MXW2X-SM58",desc:"Shure MXW2X/SM58 Handheld Microphone",hs:"8518100090",coo:"CN",uv:405.00,h:83,w:158,d:275,nett:1.2,gross:1.4},
+{code:"MXWAPT4Z11",desc:"Shure MXWAPT4Z11 Access Point Transceiver",hs:"8517620000",coo:"TW",uv:862.00,h:24,w:170,d:170,nett:1,gross:1.2},
+{code:"MXWNCS4-UK",desc:"Shure MXWNCS4-UK Charging Station",hs:"8504406090",coo:"CN",uv:678.00,h:68,w:343,d:184,nett:2.9,gross:3.1},
+{code:"P300-IMX",desc:"Shure P300-IMX Audio Processor",hs:"8157620000",coo:"CN",uv:1571.00,h:16,w:83,d:89,nett:0.5,gross:0.8},
+{code:"WL183MB-TQG",desc:"Shure WL183MB/O-TQG Lavalier Microphone",hs:"8518100090",coo:"CN",uv:260.00,h:75,w:120,d:120,nett:0.5,gross:0.85},
+{code:"FW-55BZ30L",desc:"Sony FW-65BZ30L 65 inch Display",hs:"8528529100",coo:"CN",uv:872.00,h:840,w:1362,d:160,nett:15.7,gross:23},
+{code:"FW-65BZ30L",desc:"Sony FW-55BZ30L 55 inch Display",hs:"8528529100",coo:"JP",uv:696.44,h:966,w:1588,d:184,nett:22.1,gross:30},
+{code:"FW-75BZ30L",desc:"Sony FW-75BZ30L 75 inch Display",hs:"8528529100",coo:"JP",uv:1212.10,h:1114,w:1824,d:187,nett:31.7,gross:43},
+{code:"FW-98BZ35L",desc:"Sony FW-98BZ35L 98 inch Display",hs:"8528529100",coo:"JP",uv:7150.00,h:1391,w:2330,d:283,nett:67.2,gross:91},
+{code:"FWD-43X80J-UK",desc:"Sony FWD-43X80J/UK 43 inch Display",hs:"8528529100",coo:"JP",uv:545.09,h:695,w:1070,d:141,nett:10,gross:14},
+{code:"EDM-16",desc:"SY EDM 16 Edid",hs:"8517699000",coo:"TW",uv:24.00,h:20,w:40,d:20,nett:0.2,gross:0.3},
+{code:"TIEBASE28B",desc:"TIEBASE28B Tie-rack Bases",hs:"3926909790",coo:"CN",uv:1.10,h:320,w:520,d:330,nett:10,gross:11.5},
+{code:"TouchCUE-7",desc:"TouchCUE-7 Touchpanel",hs:"8537109860",coo:"US",uv:1081.51,h:97,w:199,d:115,nett:0.8,gross:1.4},
+{code:"TPE-115GI",desc:"TPE-115GI POE Injector",hs:"8517620000",coo:"CN",uv:17.17,h:57,w:155,d:33,nett:1,gross:1.2},
+{code:"TPE-119GI",desc:"Trendnet TPE-119GI PoE Injector",hs:"8517620000",coo:"US",uv:59.35,h:36,w:154,d:73,nett:0.4,gross:0.8},
+{code:"AVCAB01",desc:"Turning Leaf AV Cabinet 01",hs:"9403208000",coo:"UK",uv:325.00,h:1100,w:605,d:640,nett:30,gross:37},
+{code:"KPR120CB",desc:"Unicol KPR120CB Projector Ceiling Kit",hs:"8302420090",coo:"UK",uv:120.34,h:2000,w:45,d:45,nett:0.8,gross:1},
+{code:"MCM1",desc:"Unicol MCM1 Ceiling Camera Mount (Poly E60)",hs:"8302420090",coo:"UK",uv:72.50,h:335,w:200,d:250,nett:3.5,gross:3.7},
+{code:"RFWSH-HD",desc:"Unicol RFWSH-HD Floor Stand",hs:"9403109800",coo:"UK",uv:423.00,h:1200,w:350,d:400,nett:30,gross:32},
+{code:"D5100",desc:"Visionary D5100 Decoder",hs:"8517699000",coo:"US",uv:608.00,h:29,w:146,d:136,nett:0.5,gross:0.9},
+{code:"E5100",desc:"Visionary E5100 Decoder",hs:"8517699000",coo:"US",uv:608.00,h:29,w:146,d:136,nett:0.5,gross:0.9},
+{code:"ZUHD60-1E",desc:"ZeeVee ZUHD60-1E ZyPerUHD60 Encoder",hs:"8517699000",coo:"US",uv:607.00,h:25,w:215,d:120,nett:0.7,gross:1.1},
+{code:"ZUHD60-2D",desc:"ZeeVee ZUHD60-2D ZyPerUHD60 Decoder",hs:"8517699000",coo:"US",uv:657.00,h:25,w:215,d:120,nett:0.7,gross:1.1},
+{code:"ZUHD60-2EMP",desc:"ZeeVee ZUHD60-2EMP ZyPerUHD60 Encoder",hs:"8517699000",coo:"US",uv:1366.00,h:25,w:215,d:120,nett:0.7,gross:1.1},
+];
+
+const CKEY='wsav_cat_v2', SKEY='wsav_sig_v1';
+let custom=[], lines=[], sigData=null, editId=null;
+
+// ── STORAGE ──
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+
+function loadStorage(){
+  const c=lsGet(CKEY); if(c)try{custom=JSON.parse(c);}catch(e){}
+  const s=lsGet(SKEY); if(s){sigData=s;applySig();}
+}
+function saveCustom(){lsSet(CKEY,JSON.stringify(custom));}
+
+function allItems(){return [...BUILTIN,...custom].sort((a,b)=>a.desc.localeCompare(b.desc));}
+
+// ── INIT ──
+window.onload=function(){
+  loadStorage();
+  const d=new Date();
+  document.getElementById('date').value=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  document.getElementById('sContact').value='Laura Bushe';
+  document.getElementById('sTel').value='+447717 271213';
+  document.getElementById('sEmail').value='laura.bushe@workspaceav.com';
+  updateCatCount();
+  render();
+  document.addEventListener('click',function(e){
+    if(!document.getElementById('drop').contains(e.target))
+      document.getElementById('results').style.display='none';
+  });
+};
+
+// ── TABS ──
+function showTab(t){
+  document.getElementById('invoice-tab').style.display=t==='invoice'?'block':'none';
+  document.getElementById('catalogue-tab').style.display=t==='catalogue'?'block':'none';
+  document.getElementById('ctrl').style.display=t==='invoice'?'block':'none';
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&t==='invoice')||(i===1&&t==='catalogue')));
+  if(t==='catalogue')renderCat();
+}
+
+// ── UTILS ──
+const f2=n=>Number(n||0).toFixed(2);
+const sym=()=>{const c=document.getElementById('curr').value;return c==='GBP'?'£':c==='USD'?'$':'€';};
+const fv=n=>`${sym()}${f2(n)}`;
+const g=id=>document.getElementById(id);
+const gv=id=>g(id)?g(id).value:'';
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── RENDER ──
+function render(){
+  const s=sym();
+  // header spans
+  ['sContact','sTel','sEmail','date','carrier','docNum','curr',
+   'cName','cAddr1','cAddr2','cVat','cEori','cContact','cTel','cEmail'].forEach(k=>{
+    const v=gv(k);
+    ['h-'+k,'h-'+k+'2'].forEach(id=>{const el=g(id);if(el)el.textContent=v;});
+  });
+  g('inv-title').textContent='Commercial Invoice'+(gv('num')?' - '+gv('num'):'');
+  g('h-terms').textContent='Freight Terms: '+gv('terms');
+  g('h-date2').textContent=gv('date');
+
+  // totals
+  const totV=lines.reduce((a,l)=>a+(+l.uv||0)*(+l.qty||0),0);
+  const totN=lines.reduce((a,l)=>a+(+l.nett||0)*(+l.qty||0),0);
+  const totG=lines.reduce((a,l)=>a+(+l.gross||0)*(+l.qty||0),0);
+  g('inv-total').textContent=fv(totV);
+
+  // summary
+  if(lines.length>0)
+    g('line-summary').innerHTML=`${lines.length} line${lines.length!==1?'s':''} &middot; <strong>${fv(totV)}</strong> &middot; Gross: <strong>${f2(totG)} kg</strong>`;
+  else g('line-summary').textContent='';
+
+  // invoice lines
+  const eM=Math.max(3,20-lines.length);
+  let lHTML='';
+  lines.forEach((l,i)=>{
+    const bg=i%2===0?'#f3f8fc':'white';
+    lHTML+=`<tr style="background:${bg}">
+      <td class="cell" style="text-align:center">${l.qty}</td>
+      <td class="cell">${esc(l.desc)}</td>
+      <td class="cell" style="text-align:center">${esc(l.hs)}</td>
+      <td class="cell" style="text-align:center">${esc(l.coo)}</td>
+      <td class="cell" style="background:#fdf3f3;text-align:right">${fv(+l.uv||0)}</td>
+      <td class="cell" style="background:#f5c8c8;text-align:right">${fv((+l.uv||0)*(+l.qty||0))}</td>
+    </tr>`;
+  });
+  for(let i=0;i<eM;i++){
+    const bg=(lines.length+i)%2===0?'#f3f8fc':'white';
+    lHTML+=`<tr style="background:${bg};height:18px"><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+      <td class="cell" style="background:#fdf3f3;text-align:right">${s}0.00</td>
+      <td class="cell" style="background:#f5c8c8;text-align:right">${s}0.00</td></tr>`;
+  }
+  g('inv-lines').innerHTML=lHTML;
+
+  // dims
+  const eD=Math.max(3,12-lines.length);
+  let dHTML='';
+  lines.forEach((l,i)=>{
+    const bg=i%2===0?'#f3f8fc':'white';
+    dHTML+=`<tr style="background:${bg};height:17px">
+      <td class="cell" style="font-size:9px">${esc(l.desc)}</td>
+      <td class="cell" style="font-size:9px;text-align:center">${l.qty}</td>
+      <td class="cell" style="font-size:9px;text-align:center">${l.h}</td>
+      <td class="cell" style="font-size:9px;text-align:center">${l.w}</td>
+      <td class="cell" style="font-size:9px;text-align:center">${l.d}</td>
+      <td class="cell" style="font-size:9px;text-align:center">${f2(l.nett)}</td>
+      <td class="cell" style="font-size:9px;text-align:center">${f2(l.gross)}</td>
+      <td class="cell" style="font-size:9px;background:#fdf3f3;text-align:center">${f2((+l.nett||0)*(+l.qty||0))}</td>
+      <td class="cell" style="font-size:9px;background:#f5c8c8;text-align:center">${f2((+l.gross||0)*(+l.qty||0))}</td>
+    </tr>`;
+  });
+  for(let i=0;i<eD;i++){
+    const bg=(lines.length+i)%2===0?'#f3f8fc':'white';
+    dHTML+=`<tr style="background:${bg};height:17px">
+      <td class="cell" style="font-size:9px"></td><td class="cell" style="font-size:9px"></td>
+      <td class="cell" style="font-size:9px;text-align:center">0.00</td><td class="cell" style="font-size:9px;text-align:center">0.00</td>
+      <td class="cell" style="font-size:9px;text-align:center">0.00</td><td class="cell" style="font-size:9px;text-align:center">0.00</td>
+      <td class="cell" style="font-size:9px;text-align:center">0.00</td>
+      <td class="cell" style="font-size:9px;background:#fdf3f3;text-align:center">0.00</td>
+      <td class="cell" style="font-size:9px;background:#f5c8c8;text-align:center">0.00</td></tr>`;
+  }
+  if(lines.length>0)
+    dHTML+=`<tr style="background:#edf0f3;font-weight:bold">
+      <td colspan="7" class="cell" style="font-size:9px;font-weight:bold">Total</td>
+      <td class="cell" style="font-size:9px;background:#fdf3f3;text-align:center;font-weight:bold">${f2(totN)}</td>
+      <td class="cell" style="font-size:9px;background:#f5c8c8;text-align:center;font-weight:bold">${f2(totG)}</td></tr>`;
+  g('inv-dims').innerHTML=dHTML;
+
+  // editor table
+  if(lines.length>0){
+    g('lines-editor').style.display='block';
+    let eHTML='';
+    lines.forEach((l,i)=>{
+      const bg=i%2?'#0d1e2e':'#13243a';
+      eHTML+=`<tr style="background:${bg}">
+        <td style="padding:2px 5px;border:1px solid #152535;color:#567;text-align:center">${i+1}</td>
+        <td style="padding:2px 5px;border:1px solid #152535;color:#cde">${esc(l.desc)}</td>
+        <td style="padding:2px 5px;border:1px solid #152535;color:#8ab">${esc(l.hs)}</td>
+        <td style="padding:2px 5px;border:1px solid #152535;color:#8ab;text-align:center">${esc(l.coo)}</td>
+        <td style="padding:2px 4px;border:1px solid #152535">
+          <input type="number" min="1" value="${l.qty}" style="width:42px;padding:2px 3px;background:#1a3050;border:1px solid #2a4060;border-radius:2px;color:#dde;font-size:10px;text-align:center"
+            onchange="updLine(${i},'qty',Math.max(1,parseInt(this.value)||1));render()">
+        </td>
+        <td style="padding:2px 4px;border:1px solid #152535">
+          <input type="number" min="0" step="0.01" value="${l.uv}" style="width:74px;padding:2px 3px;background:#1a3050;border:1px solid #2a4060;border-radius:2px;color:#dde;font-size:10px"
+            onchange="updLine(${i},'uv',parseFloat(this.value)||0);render()">
+        </td>
+        <td style="padding:2px 5px;border:1px solid #152535;color:#9dc;text-align:right;font-weight:600">${fv((+l.uv||0)*(+l.qty||0))}</td>
+        <td style="padding:2px 4px;border:1px solid #152535;text-align:center;white-space:nowrap">
+          <button onclick="mvLine(${i},-1);render()" style="background:#1a3050;color:#9ab;border:1px solid #2a4060;border-radius:2px;padding:1px 5px;cursor:pointer;margin-right:2px">▲</button>
+          <button onclick="mvLine(${i},1);render()" style="background:#1a3050;color:#9ab;border:1px solid #2a4060;border-radius:2px;padding:1px 5px;cursor:pointer">▼</button>
+        </td>
+        <td style="padding:2px 4px;border:1px solid #152535;text-align:center">
+          <button onclick="delLine(${i});render()" style="background:#5a1010;color:#fcc;border:none;border-radius:2px;padding:1px 6px;cursor:pointer;font-size:10px">✕</button>
+        </td>
+      </tr>`;
+    });
+    g('lines-body').innerHTML=eHTML;
+  } else {
+    g('lines-editor').style.display='none';
+  }
+}
+
+// ── LINES ──
+function updLine(i,k,v){lines[i][k]=v;}
+function delLine(i){lines.splice(i,1);}
+function mvLine(i,d){if(i+d>=0&&i+d<lines.length){[lines[i],lines[i+d]]=[lines[i+d],lines[i]];}}
+
+function pick(code){
+  const item=allItems().find(x=>x.code===code);
+  if(!item)return;
+  const i=lines.findIndex(l=>l.code===code);
+  if(i>=0)lines[i].qty++;
+  else lines.push({...item,qty:1});
+  g('srch').value='';
+  g('results').style.display='none';
+  render();
+}
+
+function toggleCmode(){
+  const f=g('cform'), b=g('cmode-btn');
+  if(f.style.display==='none'){f.style.display='block';b.textContent='✕ Cancel';b.style.background='#6a1a1a';}
+  else{f.style.display='none';b.textContent='＋ Custom Line';b.style.background='#1a5a3a';}
+}
+
+function addCustomLine(){
+  const desc=gv('cl_desc').trim();
+  if(!desc)return;
+  lines.push({code:'CL'+Date.now(),desc,hs:gv('cl_hs'),coo:gv('cl_coo'),
+    uv:+gv('cl_uv')||0,qty:+gv('cl_qty')||1,
+    h:+gv('cl_h')||0,w:+gv('cl_w')||0,d:+gv('cl_d')||0,
+    nett:+gv('cl_nett')||0,gross:+gv('cl_gross')||0});
+  ['cl_desc','cl_hs','cl_coo','cl_uv','cl_h','cl_w','cl_d','cl_nett','cl_gross'].forEach(id=>g(id).value='');
+  g('cl_qty').value='1';
+  toggleCmode();render();
+}
+
+// ── SEARCH ──
+function doSearch(){
+  const q=gv('srch').toLowerCase().trim();
+  if(!q){g('results').style.display='none';return;}
+  const hits=allItems().filter(i=>i.desc.toLowerCase().includes(q)||i.code.toLowerCase().includes(q)||i.hs.includes(q)).slice(0,14);
+  if(!hits.length){g('results').style.display='none';return;}
+  const s=sym();
+  g('results').innerHTML=hits.map(item=>`
+    <div class="hit" onclick="pick('${item.code.replace(/'/g,"\\'")}')">
+      <span style="color:${item.custom?'#7dc8f4':'#5bc'}">${esc(item.code)}</span>
+      <span style="color:${item.custom?'#7dc8f4':'#dde'}">${esc(item.desc)}${item.custom?' ★':''}</span>
+      <span style="color:#677">${esc(item.hs)}</span>
+      <span style="color:#8bc">${esc(item.coo)}</span>
+      <span style="color:#ada;text-align:right">${s}${item.uv.toFixed(2)}</span>
+    </div>`).join('');
+  g('results').style.display='block';
+}
+
+// ── SIGNATURE ──
+function loadSig(inp){
+  const file=inp.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{sigData=e.target.result;lsSet(SKEY,sigData);applySig();};
+  r.readAsDataURL(file);
+}
+function applySig(){
+  if(sigData){
+    g('sig-display').innerHTML=`<img src="${sigData}" style="height:44px;max-width:180px;object-fit:contain;display:block;margin:0 auto">`;
+    g('sig-area').innerHTML=`
+      <img src="${sigData}" style="height:28px;max-width:120px;object-fit:contain;background:white;border:1px solid #254060;border-radius:2px;padding:2px">
+      <label style="padding:3px 8px;background:#1a3a5a;color:#9bc;border:1px solid #254060;border-radius:3px;cursor:pointer;font-size:10px;white-space:nowrap;margin-left:6px">
+        Change<input type="file" accept="image/*" style="display:none" onchange="loadSig(this)">
+      </label>
+      <button onclick="clearSig()" style="padding:3px 7px;background:#4a1a1a;color:#fcc;border:none;border-radius:2px;cursor:pointer;font-size:10px;margin-left:4px">✕</button>`;
+  }
+}
+function clearSig(){
+  sigData=null;try{localStorage.removeItem(SKEY);}catch(e){}
+  g('sig-display').innerHTML='<span style="color:#aaa;font-style:italic;font-size:11px">[Signature]</span>';
+  g('sig-area').innerHTML=`<label style="padding:4px 12px;background:#1a3a5a;color:#9bc;border:1px dashed #254060;border-radius:3px;cursor:pointer;font-size:10px;white-space:nowrap">↑ Upload Image<input type="file" accept="image/*" style="display:none" onchange="loadSig(this)"></label>`;
+}
+
+// ── RESET ──
+function resetAll(){
+  lines=[];
+  ['num','carrier','docNum','cName','cAddr1','cAddr2','cVat','cEori','cContact','cTel','cEmail'].forEach(id=>g(id).value='');
+  g('terms').value='DDP';g('curr').value='GBP';
+  const d=new Date();g('date').value=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  render();
+}
+
+// ── CATALOGUE ──
+function updateCatCount(){
+  g('cat-count').innerHTML=`<span style="color:#cde">${BUILTIN.length} built-in</span>${custom.length>0?` <span style="color:#7dc8f4">+${custom.length} custom</span>`:''}`;
+}
+function renderCat(){
+  const q=g('catQ').value.toLowerCase();
+  const showBI=g('showBI').checked;
+  const src=showBI?allItems():custom;
+  const items=q?src.filter(i=>i.desc.toLowerCase().includes(q)||i.code.toLowerCase().includes(q)):src;
+  g('cat-shown').textContent=items.length+' items shown';
+  g('cat-title').textContent=`Product Catalogue — ${BUILTIN.length} built-in · ${custom.length} custom`;
+  let html='';
+  items.forEach((item,i)=>{
+    const isC=!!item.custom, bg=i%2?'#0d1e2e':'#13243a';
+    if(editId===item.code){
+      html+=`<tr style="background:${bg}">
+        <td style="padding:2px 6px;text-align:center;color:#7dc8f4">★</td>
+        ${['code','desc','hs','coo','uv','h','w','d','nett','gross'].map((k,j)=>`<td style="padding:2px 3px"><input id="ei_${k}" value="${esc(item[k]||'')}" style="width:${[82,220,88,38,64,52,52,52,54,58][j]}px;padding:2px 3px;background:#1a3050;border:1px solid #2a4060;border-radius:2px;color:#dde;font-size:9px"></td>`).join('')}
+        <td style="padding:2px 6px;white-space:nowrap">
+          <button onclick="saveEdit('${esc(item.code)}')" style="background:#1a5a3a;color:#cfc;border:none;border-radius:2px;padding:2px 8px;cursor:pointer;font-size:9px;margin-right:3px">✓ Save</button>
+          <button onclick="editId=null;renderCat()" style="background:#3a2a1a;color:#fca;border:none;border-radius:2px;padding:2px 6px;cursor:pointer;font-size:9px">✕</button>
+        </td></tr>`;
+    } else {
+      html+=`<tr style="background:${bg}">
+        <td style="padding:2px 6px;text-align:center;font-size:11px;color:${isC?'#7dc8f4':'#334'}">${isC?'★':'·'}</td>
+        <td style="padding:2px 6px;color:#5bc;white-space:nowrap">${esc(item.code)}</td>
+        <td style="padding:2px 6px;color:${isC?'#7dc8f4':'#cde'}">${esc(item.desc)}</td>
+        <td style="padding:2px 6px;color:#8ab">${esc(item.hs)}</td>
+        <td style="padding:2px 6px;color:#8ab;text-align:center">${esc(item.coo)}</td>
+        <td style="padding:2px 6px;color:#ada;text-align:right">£${f2(item.uv)}</td>
+        ${[item.h,item.w,item.d,item.nett,item.gross].map(v=>`<td style="padding:2px 6px;color:#677;text-align:center">${v}</td>`).join('')}
+        <td style="padding:2px 6px;white-space:nowrap">${isC?
+          `<button onclick="startEdit('${esc(item.code)}')" style="background:#1a3a5a;color:#9bc;border:none;border-radius:2px;padding:2px 7px;cursor:pointer;font-size:9px;margin-right:3px">✎ Edit</button>
+           <button onclick="delCat('${esc(item.code)}')" style="background:#5a1010;color:#fcc;border:none;border-radius:2px;padding:2px 6px;cursor:pointer;font-size:9px">✕</button>`:
+          '<span style="color:#345;font-size:9px;font-style:italic">built-in</span>'}</td>
+      </tr>`;
+    }
+  });
+  g('cat-body').innerHTML=html;
+  updateCatCount();
+}
+function addToCat(){
+  const code=gv('ni_code').trim(),desc=gv('ni_desc').trim();
+  if(!code||!desc)return;
+  custom.push({code,desc,hs:gv('ni_hs'),coo:gv('ni_coo'),uv:+gv('ni_uv')||0,
+    h:+gv('ni_h')||0,w:+gv('ni_w')||0,d:+gv('ni_d')||0,nett:+gv('ni_nett')||0,gross:+gv('ni_gross')||0,custom:true});
+  saveCustom();
+  ['ni_code','ni_desc','ni_hs','ni_coo','ni_uv','ni_h','ni_w','ni_d','ni_nett','ni_gross'].forEach(id=>g(id).value='');
+  renderCat();
+}
+function delCat(code){custom=custom.filter(i=>i.code!==code);saveCustom();renderCat();}
+function startEdit(code){editId=code;renderCat();}
+function saveEdit(code){
+  const fi=custom.findIndex(i=>i.code===code);
+  if(fi<0)return;
+  ['code','desc','hs','coo','uv','h','w','d','nett','gross'].forEach(k=>{
+    const el=g('ei_'+k);
+    if(el)custom[fi][k]=['uv','h','w','d','nett','gross'].includes(k)?+el.value||0:el.value;
+  });
+  editId=null;saveCustom();renderCat();
+}
+
+// ── DOWNLOAD ──
+function downloadInvoice(){
+  const s=sym();
+  const fvl=n=>`${s}${f2(n)}`;
+  const totV=lines.reduce((a,l)=>a+(+l.uv||0)*(+l.qty||0),0);
+  const totN=lines.reduce((a,l)=>a+(+l.nett||0)*(+l.qty||0),0);
+  const totG=lines.reduce((a,l)=>a+(+l.gross||0)*(+l.qty||0),0);
+  const eM=Math.max(3,20-lines.length), eD=Math.max(3,12-lines.length);
+  const c=(t,s,v)=>`<td style="border:1px solid #ccc;padding:3px 5px;font-size:${s||'10'}px;${v||''}">${t}</td>`;
+  const hdrRow=(l,v)=>`<tr><td style="font-weight:bold;text-align:right;padding-right:8px;padding-bottom:3px;white-space:nowrap;font-size:10px">${l}</td><td style="border-bottom:1px solid #444;min-width:158px;padding-left:4px;padding-bottom:3px;font-size:10px">${v||''}</td></tr>`;
+  const sigHTML=sigData?`<img src="${sigData}" style="height:44px;max-width:180px;object-fit:contain;display:block;margin:0 auto 3px">`:`<div style="height:36px;line-height:36px;text-align:center;color:#aaa;font-style:italic;font-size:11px">[Signature]</div>`;
+  const lRows=lines.map((l,i)=>`<tr style="background:${i%2===0?'#f3f8fc':'white'}">
+    ${c(l.qty,'10','text-align:center')}${c(esc(l.desc))}${c(esc(l.hs),'10','text-align:center')}${c(esc(l.coo),'10','text-align:center')}
+    ${c(fvl(+l.uv||0),'10','background:#fdf3f3;text-align:right')}${c(fvl((+l.uv||0)*(+l.qty||0)),'10','background:#f5c8c8;text-align:right')}</tr>`).join('');
+  const emR=Array(eM).fill(0).map((_,i)=>`<tr style="background:${(lines.length+i)%2===0?'#f3f8fc':'white'};height:18px">
+    <td style="border:1px solid #ccc;padding:3px 5px"></td><td style="border:1px solid #ccc;padding:3px 5px"></td><td style="border:1px solid #ccc;padding:3px 5px"></td><td style="border:1px solid #ccc;padding:3px 5px"></td>
+    <td style="border:1px solid #ccc;padding:3px 5px;background:#fdf3f3;text-align:right">${s}0.00</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;background:#f5c8c8;text-align:right">${s}0.00</td></tr>`).join('');
+  const dRows=lines.map((l,i)=>`<tr style="background:${i%2===0?'#f3f8fc':'white'};height:17px">
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px">${esc(l.desc)}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">${l.qty}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">${l.h}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">${l.w}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">${l.d}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">${f2(l.nett)}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">${f2(l.gross)}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;background:#fdf3f3;text-align:center">${f2((+l.nett||0)*(+l.qty||0))}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;background:#f5c8c8;text-align:center">${f2((+l.gross||0)*(+l.qty||0))}</td></tr>`).join('');
+  const edR=Array(eD).fill(0).map((_,i)=>`<tr style="background:${(lines.length+i)%2===0?'#f3f8fc':'white'};height:17px">
+    <td style="border:1px solid #ccc;font-size:9px;padding:3px 5px"></td><td style="border:1px solid #ccc;font-size:9px;padding:3px 5px"></td>
+    ${Array(5).fill('<td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;text-align:center">0.00</td>').join('')}
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;background:#fdf3f3;text-align:center">0.00</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;background:#f5c8c8;text-align:center">0.00</td></tr>`).join('');
+  const totRow=lines.length>0?`<tr style="background:#edf0f3;font-weight:bold">
+    <td colspan="7" style="border:1px solid #ccc;padding:3px 5px;font-size:9px;font-weight:bold">Total</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;background:#fdf3f3;text-align:center;font-weight:bold">${f2(totN)}</td>
+    <td style="border:1px solid #ccc;padding:3px 5px;font-size:9px;background:#f5c8c8;text-align:center;font-weight:bold">${f2(totG)}</td></tr>`:'';
+  const num=gv('num');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Invoice${num?' - '+num:''}</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:10mm 12mm}@media print{body{padding:7mm 9mm}@page{margin:5mm}}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style>
+</head><body>
+<div style="font-size:20px;font-weight:bold;margin-bottom:8px">Commercial Invoice${num?' - '+esc(num):''}</div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:4px;font-size:10px"><tr>
+  <td style="vertical-align:top;width:54%;padding-bottom:4px">
+    <div style="font-weight:bold;font-size:11px">Workspace Audio Visual Ltd</div>
+    <div>Unit 5 Frobisher Industrial Centre, Budds Lane</div><div>Romsey, Hampshire, SO51 0EZ, UK</div>
+    <div>Contact Name: ${esc(gv('sContact'))}</div><div>Phone Number: ${esc(gv('sTel'))}</div>
+  </td>
+  <td style="vertical-align:top"><table style="border-collapse:collapse;margin-left:auto">
+    ${hdrRow('Date:',esc(gv('date')))}${hdrRow('Ship Via (Carrier)',esc(gv('carrier')))}${hdrRow('Document Number:',esc(gv('docNum')))}
+  </table></td>
+</tr><tr><td colspan="2" style="padding-bottom:4px;font-size:10px">
+  <div>VAT number: GB380641989</div><div>EORI Number: GB380641989000</div>
+</td></tr></table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:5px;font-size:10px"><tr>
+  <td style="width:49.5%;background:#cce0f2;padding:7px 8px;vertical-align:top;border:1px solid #aac8e0">
+    <div style="font-weight:bold;font-size:11px;margin-bottom:3px">Consignee</div>
+    <div style="font-weight:bold">${esc(gv('cName'))||'[Customer Name]'}</div>
+    ${gv('cAddr1')?`<div>${esc(gv('cAddr1'))}</div>`:''}${gv('cAddr2')?`<div>${esc(gv('cAddr2'))}</div>`:''}
+    <div>VAT Number: ${esc(gv('cVat'))}</div><div>EORI Number: ${esc(gv('cEori'))}</div>
+    <div style="margin-top:4px">Contact Name: ${esc(gv('cContact'))}</div>
+    <div>Telephone Number: ${esc(gv('cTel'))}</div><div>Email: ${esc(gv('cEmail'))}</div>
+  </td><td style="width:1%"></td>
+  <td style="width:49.5%;background:#cce0f2;padding:7px 8px;vertical-align:top;border:1px solid #aac8e0">
+    <div style="font-weight:bold;font-size:11px;margin-bottom:3px">Shipper Address</div>
+    <div>Workspace Audio Visual Ltd</div><div>Unit 5 Frobisher Industrial Centre, Budds Lane</div>
+    <div>Romsey, Hampshire, SO51 0EZ, UK</div><div>VAT number: GB380641989</div><div>EORI Number: GB380641989000</div>
+    <div style="margin-top:4px">Contact Name: ${esc(gv('sContact'))}</div>
+    <div>Telephone Number: ${esc(gv('sTel'))}</div><div style="color:#1155cc">Email: ${esc(gv('sEmail'))}</div>
+  </td></tr></table>
+<div style="background:#8cbe8c;padding:5px 8px;text-align:center;font-weight:bold;font-size:11px;border:1px solid #7aaa7a;margin-bottom:6px">Freight Terms: ${esc(gv('terms'))}</div>
+<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;text-align:center;background:#edf0f3;width:42px">Qty</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;text-align:left;background:#edf0f3;padding-left:6px">Description of Goods</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;text-align:center;background:#edf0f3;width:80px">HS Code</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;text-align:center;background:#edf0f3;width:58px">Country of<br>Origin</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;text-align:center;background:#f5c8c8;width:70px">Unit<br>Value</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;text-align:center;background:#f5c8c8;width:70px">Total<br>Value</th>
+</tr></thead><tbody>${lRows}${emR}</tbody></table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10px"><tr>
+  <td style="background:#8cbe8c;padding:5px 8px;font-weight:bold;border:1px solid #7aaa7a;font-size:11px">All Charges listed above are in ${esc(gv('curr'))}</td>
+  <td style="background:#8cbe8c;padding:5px 8px;font-weight:bold;border:1px solid #7aaa7a;text-align:right;width:85px;font-size:11px">Total</td>
+  <td style="background:#f5c8c8;padding:5px 8px;font-weight:bold;border:1px solid #e8aaaa;text-align:right;width:72px;font-size:11px">${fvl(totV)}</td>
+</tr></table>
+<table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:10px"><thead><tr>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:left">Item</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:center;width:34px">Qty</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:center;width:66px">Height<br>(mm)</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:center;width:66px">Width<br>(mm)</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:center;width:66px">Depth<br>(mm)</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:center;width:74px">Nett Weight<br>(kg)</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#edf0f3;font-size:9px;text-align:center;width:74px">Gross Weight<br>(kg)</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#f5c8c8;font-size:9px;text-align:center;width:74px">Total Nett<br>(kg)</th>
+  <th style="border:1px solid #ccc;padding:3px 5px;font-weight:bold;background:#f5c8c8;font-size:9px;text-align:center;width:74px">Total Gross<br>(kg)</th>
+</tr></thead><tbody>${dRows}${edR}${totRow}</tbody></table>
+<div style="background:#cce0f2;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border:1px solid #aac8e0;min-height:60px">
+  <div></div>
+  <div style="text-align:center">${sigHTML}<div style="font-weight:bold;font-size:10px">Shipper's Signature</div></div>
+  <div style="font-size:10px">${esc(gv('date'))}</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script>
+</body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Commercial-Invoice'+(num?'-'+num:'')+'.html';
+  a.click();URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>
